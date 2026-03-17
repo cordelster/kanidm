@@ -5,7 +5,7 @@ ARG HASSIO_BASE=ghcr.io/home-assistant/amd64-base:latest
 
 FROM ${HASSIO_BASE}
 
-ARG RADIUS_USER=radiusd
+ARG RADIUS_USER=radius
 EXPOSE 1812 1813
 ENV KANIDM_CONFIG_FILE="/data/kanidm"
 
