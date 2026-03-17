@@ -11,8 +11,9 @@ ARG KANIDM_BUILD_PROFILE="container_generic"
 ARG KANIDM_BUILD_OPTIONS=""
 
 ENV KANIDM_BUILD_PROFILE=${KANIDM_BUILD_PROFILE:-container_generic}
+ENV OPENSSL_STATIC=1
+ENV OPENSSL_LIB_DIR=/usr/lib
 ENV OPENSSL_INCLUDE_DIR=/usr/include
-ENV RUSTFLAGS="-L/usr/lib"
 
 RUN apk add --no-cache \
     clang-dev \
@@ -21,6 +22,7 @@ RUN apk add --no-cache \
     eudev-dev \
     linux-pam-dev \
     openssl-dev \
+    openssl-libs-static \
     pkgconf \
     rsync \
     findutils \
