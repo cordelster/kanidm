@@ -25,8 +25,8 @@ COPY rlm_python/sites-available/ /etc/raddb/sites-available/
 
 WORKDIR /etc/raddb
 
-RUN ln -s /etc/raddb/mods-available/python3 /etc/raddb/mods-enabled/python3 && \
-    ln -s /etc/raddb/sites-available/check-eap-tls /etc/raddb/sites-enabled/check-eap-tls
+RUN ln -sf /etc/raddb/mods-available/python3 /etc/raddb/mods-enabled/python3 && \
+    ln -sf /etc/raddb/sites-available/check-eap-tls /etc/raddb/sites-enabled/check-eap-tls
 
 RUN rm -f /etc/raddb/mods-available/sql \
           /etc/raddb/mods-enabled/passwd \
