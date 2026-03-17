@@ -1,0 +1,70 @@
+# Build the kanidm CLI tools for Home Assistant OS.
+
+ARG RUST_IMAGE=rust:1-alpine3.23
+ARG HASSIO_BASE=ghcr.io/home-assistant/amd64-base:latest
+
+# ======================
+FROM ${RUST_IMAGE} AS builder
+
+ARG KANIDM_FEATURES=""
+ARG KANIDM_BUILD_PROFILE="container_generic"
+ARG KANIDM_BUILD_OPTIONS=""
+
+ENV KANIDM_BUILD_PROFILE=${KANIDM_BUILD_PROFILE:-container_generic}
+ENV RUSTFLAGS="-Clinker=clang"
+
+RUN apk add --no-cache \
+    clang-dev \
+    cmake \
+    samurai \
+    eudev-dev \
+    linux-pam-dev \
+    openssl-dev \
+    rsync \
+    findutils \
+    git
+
+COPY . /usr/src/kanidm
+
+WORKDIR /usr/src/kanidm
+
+RUN --mount=type=cache,id=cargo-hassio-tools-registry,target=/usr/local/cargo/registry \
+    export CARGO_HOME=/usr/local/cargo && \
+    export CC="/usr/bin/clang" && \
+    cargo build --locked -p kanidm_tools ${KANIDM_BUILD_OPTIONS} \
+        --target-dir="/usr/src/kanidm/target/" \
+        --features="${KANIDM_FEATURES}" \
+        --release && \
+    cargo build --locked -p kanidm-ipa-sync ${KANIDM_BUILD_OPTIONS} \
+        --target-dir="/usr/src/kanidm/target/" \
+        --features="${KANIDM_FEATURES}" \
+        --release && \
+    cargo build --locked -p kanidm-ldap-sync ${KANIDM_BUILD_OPTIONS} \
+        --target-dir="/usr/src/kanidm/target/" \
+        --features="${KANIDM_FEATURES}" \
+        --release && \
+    cargo install \
+        --git https://github.com/kanidm/webauthn-rs.git \
+        --rev 66a3d9903b31fa5a67fc00dd65ba8f55695df183 \
+        --force fido-mds-tool \
+        --target-dir="/usr/src/kanidm/target/"
+
+# ======================
+FROM ${HASSIO_BASE}
+
+RUN apk add --no-cache \
+    ca-certificates \
+    openssl \
+    tzdata
+
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm /usr/local/bin/
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm-ipa-sync /usr/local/bin/
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm-ldap-sync /usr/local/bin/
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/fido-mds-tool /usr/local/bin/
+
+RUN mkdir /etc/kanidm && touch /etc/kanidm/config
+
+ENV RUST_BACKTRACE=1
+
+ENTRYPOINT ["/usr/local/bin/kanidm"]
+CMD ["-h"]

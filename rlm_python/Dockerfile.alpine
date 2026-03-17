@@ -1,0 +1,55 @@
+# Build the kanidm RADIUS integration using Alpine Linux.
+# No Rust build stage needed — FreeRADIUS and pykanidm are installed via apk/pip.
+
+ARG ALPINE_VERSION=3.23
+
+FROM alpine:${ALPINE_VERSION}
+
+ARG RADIUS_USER=radiusd
+EXPOSE 1812 1813
+ENV KANIDM_CONFIG_FILE="/data/kanidm"
+
+RUN apk add --no-cache \
+    freeradius \
+    freeradius-python3 \
+    python3 \
+    py3-pip \
+    openssl \
+    curl \
+    iproute2 \
+    iputils \
+    tzdata
+
+ADD rlm_python/mods-available/ /etc/raddb/mods-available/
+COPY rlm_python/sites-available/ /etc/raddb/sites-available/
+
+WORKDIR /etc/raddb
+
+RUN ln -s /etc/raddb/mods-available/python3 /etc/raddb/mods-enabled/python3 && \
+    ln -s /etc/raddb/sites-available/check-eap-tls /etc/raddb/sites-enabled/check-eap-tls
+
+RUN rm -f /etc/raddb/mods-available/sql \
+          /etc/raddb/mods-enabled/passwd \
+          /etc/raddb/mods-enabled/totp
+
+RUN chown -R $RADIUS_USER. /etc/raddb/ && \
+    chmod 775 /etc/raddb/certs && \
+    chmod 640 /etc/raddb/clients.conf
+
+RUN mkdir -p /pkg/pykanidm/
+COPY pykanidm/ /pkg/pykanidm/
+
+RUN python3 -m pip install \
+    --break-system-packages \
+    --no-cache-dir \
+    --no-warn-script-location \
+    /pkg/pykanidm
+
+COPY rlm_python/radius_entrypoint.py /radius_entrypoint.py
+
+RUN mkdir /data && chown $RADIUS_USER /data
+RUN chmod a+r /etc/raddb/certs/ -R
+
+USER $RADIUS_USER
+
+CMD [ "/usr/bin/python3", "/radius_entrypoint.py" ]

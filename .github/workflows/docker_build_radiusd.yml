@@ -50,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: linux/arm64,linux/amd64
-          tags: ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:devel,ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:${{ needs.set_tag_values.outputs.ref_name}}
+          tags: ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:opensuse-devel,ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:opensuse-${{ needs.set_tag_values.outputs.ref_name}}
           file: rlm_python/Dockerfile
           context: .
           labels: ${{ steps.meta.outputs.labels }}
@@ -87,5 +87,5 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             oras login -u "${{ github.actor }}" --password-stdin ghcr.io
-          oras copy --from-oci-layout "/tmp/radius-docker.tar:devel" \
-            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:devel"
+          oras copy --from-oci-layout "/tmp/radius-docker.tar:opensuse-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/radius:opensuse-devel"

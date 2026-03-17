@@ -48,7 +48,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: "linux/amd64"
-          tags: ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:devel,ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:${{ needs.set_tag_values.outputs.ref_name}}
+          tags: ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:opensuse-devel,ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:opensuse-${{ needs.set_tag_values.outputs.ref_name}}
 
           build-args: |
             "KANIDM_FEATURES="
@@ -86,5 +86,5 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             oras login -u "${{ github.actor }}" --password-stdin ghcr.io
-          oras copy --from-oci-layout "/tmp/kanidm-docker.tar:devel" \
-            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:devel"
+          oras copy --from-oci-layout "/tmp/kanidm-docker.tar:opensuse-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/kanidm:opensuse-devel"
