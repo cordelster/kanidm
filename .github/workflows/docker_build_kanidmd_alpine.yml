@@ -1,9 +1,10 @@
 ---
 name: Container - Alpine / HASSIO (kanidm, kanidmd, radius)
 
-# Builds Alpine 3.23 and edge images for all three services, then HASSIO
-# variants once all Alpine builds for that service succeed.
-# Always builds and uploads OCI artifacts; only pushes to GHCR on master or tags.
+# Builds Alpine 3.23 and edge images for all three services across amd64
+# and arm64 (native runners). HASSIO variants run once all Alpine builds
+# for that service succeed. Pushes multi-arch manifests to GHCR on master
+# or tags.
 "on":
   pull_request:
   push:
@@ -33,39 +34,32 @@ jobs:
       ref_name: ${{ steps.step2.outputs.REF_NAME }}
 
   # ============================================================
-  # Alpine builds — all six run in parallel (3 images × 2 versions)
+  # Alpine builds — 12 jobs in parallel (3 images × 2 versions × 2 arches)
+  # Each runs on a native runner for its architecture.
   # ============================================================
-
   alpine_build:
-    name: Build ${{ matrix.image }}:alpine-${{ matrix.alpine_version }}
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}
+    runs-on: ${{ matrix.runs_on }}
     needs: set_tag_values
     strategy:
       fail-fast: false
       matrix:
         include:
-          - image: kanidmd
-            alpine_version: "3.23"
-            rust_image: "rust:1-alpine3.23"
-            dockerfile: server/Dockerfile.alpine
-          - image: kanidmd
-            alpine_version: "edge"
-            rust_image: "rust:alpine"
-            dockerfile: server/Dockerfile.alpine
-          - image: kanidm
-            alpine_version: "3.23"
-            rust_image: "rust:1-alpine3.23"
-            dockerfile: tools/Dockerfile.alpine
-          - image: kanidm
-            alpine_version: "edge"
-            rust_image: "rust:alpine"
-            dockerfile: tools/Dockerfile.alpine
-          - image: radius
-            alpine_version: "3.23"
-            dockerfile: rlm_python/Dockerfile.alpine
-          - image: radius
-            alpine_version: "edge"
-            dockerfile: rlm_python/Dockerfile.alpine
+          # kanidmd
+          - {image: kanidmd, alpine_version: "3.23", rust_image: "rust:1-alpine3.23", dockerfile: server/Dockerfile.alpine, platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: kanidmd, alpine_version: "3.23", rust_image: "rust:1-alpine3.23", dockerfile: server/Dockerfile.alpine, platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
+          - {image: kanidmd, alpine_version: "edge",  rust_image: "rust:alpine",        dockerfile: server/Dockerfile.alpine, platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: kanidmd, alpine_version: "edge",  rust_image: "rust:alpine",        dockerfile: server/Dockerfile.alpine, platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
+          # kanidm
+          - {image: kanidm,  alpine_version: "3.23", rust_image: "rust:1-alpine3.23", dockerfile: tools/Dockerfile.alpine,  platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: kanidm,  alpine_version: "3.23", rust_image: "rust:1-alpine3.23", dockerfile: tools/Dockerfile.alpine,  platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
+          - {image: kanidm,  alpine_version: "edge",  rust_image: "rust:alpine",        dockerfile: tools/Dockerfile.alpine,  platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: kanidm,  alpine_version: "edge",  rust_image: "rust:alpine",        dockerfile: tools/Dockerfile.alpine,  platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
+          # radius (no Rust build, no rust_image needed)
+          - {image: radius,  alpine_version: "3.23", dockerfile: rlm_python/Dockerfile.alpine, platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: radius,  alpine_version: "3.23", dockerfile: rlm_python/Dockerfile.alpine, platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
+          - {image: radius,  alpine_version: "edge",  dockerfile: rlm_python/Dockerfile.alpine, platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64}
+          - {image: radius,  alpine_version: "edge",  dockerfile: rlm_python/Dockerfile.alpine, platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -76,13 +70,13 @@ jobs:
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
-      - name: Build ${{ matrix.image }} Alpine ${{ matrix.alpine_version }}
+      - name: Build ${{ matrix.image }} alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}
         uses: docker/build-push-action@v6
         with:
-          platforms: "linux/amd64"
+          platforms: ${{ matrix.platform }}
           tags: >-
-            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-devel,
-            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ needs.set_tag_values.outputs.ref_name }}
+            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}-devel,
+            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}-${{ needs.set_tag_values.outputs.ref_name }}
           build-args: |
             RUST_IMAGE=${{ matrix.rust_image }}
             ALPINE_VERSION=${{ matrix.alpine_version }}
@@ -90,35 +84,34 @@ jobs:
           context: .
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          outputs: type=oci,dest=/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-docker.tar
+          cache-from: type=gha,scope=${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}
+          outputs: type=oci,dest=/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}-docker.tar
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-docker
-          path: /tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-docker.tar
+          name: ${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}-docker
+          path: /tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-${{ matrix.arch_tag }}-docker.tar
 
   # ============================================================
-  # HASSIO builds — each starts after both Alpine versions of
-  # the same image succeed
+  # HASSIO builds — 6 jobs (3 images × 2 arches), native runners.
+  # Starts only after ALL Alpine builds succeed.
+  # amd64 uses amd64-base, arm64 uses aarch64-base.
   # ============================================================
-
   hassio_build:
-    name: Build ${{ matrix.image }}:hassio
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.image }}:hassio-${{ matrix.arch_tag }}
+    runs-on: ${{ matrix.runs_on }}
     needs: [set_tag_values, alpine_build]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - image: kanidmd
-            dockerfile: server/Dockerfile.hassio
-            hassio_base: "ghcr.io/home-assistant/amd64-base:latest"
-          - image: kanidm
-            dockerfile: tools/Dockerfile.hassio
-            hassio_base: "ghcr.io/home-assistant/amd64-base:latest"
-          - image: radius
-            dockerfile: rlm_python/Dockerfile.hassio
-            hassio_base: "ghcr.io/home-assistant/amd64-base:latest"
+          - {image: kanidmd, platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64, hassio_base: "ghcr.io/home-assistant/amd64-base:latest",    rust_image: "rust:1-alpine3.23", dockerfile: server/Dockerfile.hassio}
+          - {image: kanidmd, platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64, hassio_base: "ghcr.io/home-assistant/aarch64-base:latest", rust_image: "rust:1-alpine3.23", dockerfile: server/Dockerfile.hassio}
+          - {image: kanidm,  platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64, hassio_base: "ghcr.io/home-assistant/amd64-base:latest",    rust_image: "rust:1-alpine3.23", dockerfile: tools/Dockerfile.hassio}
+          - {image: kanidm,  platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64, hassio_base: "ghcr.io/home-assistant/aarch64-base:latest", rust_image: "rust:1-alpine3.23", dockerfile: tools/Dockerfile.hassio}
+          - {image: radius,  platform: linux/amd64, runs_on: ubuntu-latest,      arch_tag: amd64, hassio_base: "ghcr.io/home-assistant/amd64-base:latest",    dockerfile: rlm_python/Dockerfile.hassio}
+          - {image: radius,  platform: linux/arm64, runs_on: ubuntu-24.04-arm, arch_tag: arm64, hassio_base: "ghcr.io/home-assistant/aarch64-base:latest", dockerfile: rlm_python/Dockerfile.hassio}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -129,32 +122,36 @@ jobs:
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
-      - name: Build ${{ matrix.image }} HASSIO
+      - name: Build ${{ matrix.image }} hassio-${{ matrix.arch_tag }}
         uses: docker/build-push-action@v6
         with:
-          platforms: "linux/amd64"
+          platforms: ${{ matrix.platform }}
           tags: >-
-            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-devel,
-            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-${{ needs.set_tag_values.outputs.ref_name }}
+            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-${{ matrix.arch_tag }}-devel,
+            ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-${{ matrix.arch_tag }}-${{ needs.set_tag_values.outputs.ref_name }}
           build-args: |
+            RUST_IMAGE=${{ matrix.rust_image }}
             HASSIO_BASE=${{ matrix.hassio_base }}
           file: ${{ matrix.dockerfile }}
           context: .
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          outputs: type=oci,dest=/tmp/${{ matrix.image }}-hassio-docker.tar
+          cache-from: type=gha,scope=${{ matrix.image }}-hassio-${{ matrix.arch_tag }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-hassio-${{ matrix.arch_tag }}
+          outputs: type=oci,dest=/tmp/${{ matrix.image }}-hassio-${{ matrix.arch_tag }}-docker.tar
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.image }}-hassio-docker
-          path: /tmp/${{ matrix.image }}-hassio-docker.tar
+          name: ${{ matrix.image }}-hassio-${{ matrix.arch_tag }}-docker
+          path: /tmp/${{ matrix.image }}-hassio-${{ matrix.arch_tag }}-docker.tar
 
   # ============================================================
-  # Push jobs — only on master or tags
+  # Push jobs — only on master or tags.
+  # Downloads both arch artifacts, pushes each with an arch tag,
+  # then merges into a single multi-arch manifest.
   # ============================================================
-
   alpine_push:
-    name: Push ${{ matrix.image }}:alpine-${{ matrix.alpine_version }}
+    name: Push ${{ matrix.image }}:alpine-${{ matrix.alpine_version }} (multi-arch)
     runs-on: ubuntu-latest
     if: ( github.ref_type == 'tag' || github.ref == 'refs/heads/master' )
     needs: [alpine_build, set_tag_values]
@@ -165,23 +162,41 @@ jobs:
         image: [kanidmd, kanidm, radius]
         alpine_version: ["3.23", "edge"]
     steps:
-      - name: Download artifact
+      - name: Download amd64 artifact
         uses: actions/download-artifact@v7
         with:
-          name: ${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-docker
+          name: ${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-amd64-docker
+          path: /tmp
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-arm64-docker
           path: /tmp
       - name: Set up ORAS
         uses: oras-project/setup-oras@v1
-      - name: Push image to GHCR
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Push arch-specific images to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             oras login -u "${{ github.actor }}" --password-stdin ghcr.io
           oras copy \
-            --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-docker.tar:alpine-${{ matrix.alpine_version }}-devel" \
-            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-devel"
+            --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-amd64-docker.tar:alpine-${{ matrix.alpine_version }}-amd64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-devel"
+          oras copy \
+            --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-arm64-docker.tar:alpine-${{ matrix.alpine_version }}-arm64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-devel"
+      - name: Merge into multi-arch manifest
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login -u "${{ github.actor }}" --password-stdin ghcr.io
+          docker buildx imagetools create \
+            -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-devel"
 
   hassio_push:
-    name: Push ${{ matrix.image }}:hassio
+    name: Push ${{ matrix.image }}:hassio (multi-arch)
     runs-on: ubuntu-latest
     if: ( github.ref_type == 'tag' || github.ref == 'refs/heads/master' )
     needs: [hassio_build, set_tag_values]
@@ -191,17 +206,35 @@ jobs:
       matrix:
         image: [kanidmd, kanidm, radius]
     steps:
-      - name: Download artifact
+      - name: Download amd64 artifact
         uses: actions/download-artifact@v7
         with:
-          name: ${{ matrix.image }}-hassio-docker
+          name: ${{ matrix.image }}-hassio-amd64-docker
+          path: /tmp
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ matrix.image }}-hassio-arm64-docker
           path: /tmp
       - name: Set up ORAS
         uses: oras-project/setup-oras@v1
-      - name: Push image to GHCR
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Push arch-specific images to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             oras login -u "${{ github.actor }}" --password-stdin ghcr.io
           oras copy \
-            --from-oci-layout "/tmp/${{ matrix.image }}-hassio-docker.tar:hassio-devel" \
-            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-devel"
+            --from-oci-layout "/tmp/${{ matrix.image }}-hassio-amd64-docker.tar:hassio-amd64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-devel"
+          oras copy \
+            --from-oci-layout "/tmp/${{ matrix.image }}-hassio-arm64-docker.tar:hassio-arm64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-devel"
+      - name: Merge into multi-arch manifest
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login -u "${{ github.actor }}" --password-stdin ghcr.io
+          docker buildx imagetools create \
+            -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-devel" \
+            "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-devel"
