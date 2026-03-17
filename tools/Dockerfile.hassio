@@ -64,7 +64,7 @@ RUN apk add --no-cache \
 COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm /usr/local/bin/
 COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm-ipa-sync /usr/local/bin/
 COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidm-ldap-sync /usr/local/bin/
-COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/fido-mds-tool /usr/local/bin/
+COPY --from=builder --chmod=0755 /usr/local/cargo/bin/fido-mds-tool /usr/local/bin/
 
 RUN mkdir /etc/kanidm && touch /etc/kanidm/config
 
