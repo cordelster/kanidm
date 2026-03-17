@@ -1,0 +1,78 @@
+# Build the main Kanidmd server for Home Assistant OS.
+# Uses Alpine as the builder stage and a HASSIO base image as the final stage.
+#
+# The HASSIO base images are Alpine-based and include s6-overlay.
+# ENTRYPOINT is overridden to run kanidmd directly.
+#
+# Examples:
+#   amd64:   --build-arg HASSIO_BASE=ghcr.io/home-assistant/amd64-base:latest
+#   aarch64: --build-arg HASSIO_BASE=ghcr.io/home-assistant/aarch64-base:latest
+
+ARG RUST_IMAGE=rust:1-alpine3.23
+ARG HASSIO_BASE=ghcr.io/home-assistant/amd64-base:latest
+
+# ======================
+FROM ${RUST_IMAGE} AS builder
+
+ARG KANIDM_FEATURES=""
+ARG KANIDM_BUILD_PROFILE="container_generic"
+ARG KANIDM_BUILD_OPTIONS=""
+
+ENV KANIDM_BUILD_PROFILE=${KANIDM_BUILD_PROFILE:-container_generic}
+ENV RUSTFLAGS="-Clinker=clang"
+
+RUN apk add --no-cache \
+    clang-dev \
+    cmake \
+    samurai \
+    eudev-dev \
+    linux-pam-dev \
+    openssl-dev \
+    rsync \
+    findutils
+
+COPY . /usr/src/kanidm
+
+WORKDIR /usr/src/kanidm
+
+RUN --mount=type=cache,id=cargo-hassio-registry,target=/usr/local/cargo/registry \
+    export CARGO_HOME=/usr/local/cargo && \
+    export CC="/usr/bin/clang" && \
+    cargo build --locked -p daemon ${KANIDM_BUILD_OPTIONS} \
+        --target-dir="/usr/src/kanidm/target/" \
+        --features="${KANIDM_FEATURES}" \
+        --release
+
+# ======================
+# Final stage: Home Assistant OS base (Alpine-based with s6-overlay)
+FROM ${HASSIO_BASE}
+
+RUN apk add --no-cache \
+    ca-certificates \
+    openssl
+
+WORKDIR /
+
+# Copy our build
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidmd /usr/local/bin/kanidmd
+# Web assets
+COPY --from=builder /usr/src/kanidm/server/core/static /hpkg/
+
+WORKDIR /data
+
+EXPOSE 8443 3636
+
+ENV RUST_BACKTRACE=1
+
+# Override HASSIO base ENTRYPOINT to run kanidmd directly
+ENTRYPOINT ["/usr/local/bin/kanidmd"]
+
+HEALTHCHECK \
+    --interval=60s \
+    --timeout=10s \
+    --start-period=60s \
+    --start-interval=5s \
+    --retries=3 \
+    CMD [ "/usr/local/bin/kanidmd", "scripting", "healthcheck"]
+
+CMD ["server"]

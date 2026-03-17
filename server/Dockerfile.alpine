@@ -1,0 +1,71 @@
+# Build the main Kanidmd server using Alpine Linux.
+# Supports Alpine 3.23 and edge via RUST_IMAGE and ALPINE_VERSION build args.
+#
+# Examples:
+#   Alpine 3.23: --build-arg RUST_IMAGE=rust:1-alpine3.23 --build-arg ALPINE_VERSION=3.23
+#   Alpine edge: --build-arg RUST_IMAGE=rust:alpine       --build-arg ALPINE_VERSION=edge
+
+ARG RUST_IMAGE=rust:1-alpine3.23
+ARG ALPINE_VERSION=3.23
+
+# ======================
+FROM ${RUST_IMAGE} AS builder
+
+ARG KANIDM_FEATURES=""
+ARG KANIDM_BUILD_PROFILE="container_generic"
+ARG KANIDM_BUILD_OPTIONS=""
+
+ENV KANIDM_BUILD_PROFILE=${KANIDM_BUILD_PROFILE:-container_generic}
+ENV RUSTFLAGS="-Clinker=clang"
+
+RUN apk add --no-cache \
+    clang-dev \
+    cmake \
+    samurai \
+    eudev-dev \
+    linux-pam-dev \
+    openssl-dev \
+    rsync \
+    findutils
+
+COPY . /usr/src/kanidm
+
+WORKDIR /usr/src/kanidm
+
+RUN --mount=type=cache,id=cargo-alpine-registry,target=/usr/local/cargo/registry \
+    export CARGO_HOME=/usr/local/cargo && \
+    export CC="/usr/bin/clang" && \
+    cargo build --locked -p daemon ${KANIDM_BUILD_OPTIONS} \
+        --target-dir="/usr/src/kanidm/target/" \
+        --features="${KANIDM_FEATURES}" \
+        --release
+
+# ======================
+FROM alpine:${ALPINE_VERSION}
+
+RUN apk add --no-cache \
+    ca-certificates \
+    openssl
+
+WORKDIR /
+
+# Copy our build
+COPY --from=builder --chmod=0755 /usr/src/kanidm/target/release/kanidmd /sbin/
+# Web assets
+COPY --from=builder /usr/src/kanidm/server/core/static /hpkg/
+
+WORKDIR /data
+
+EXPOSE 8443 3636
+
+ENV RUST_BACKTRACE=1
+
+HEALTHCHECK \
+    --interval=60s \
+    --timeout=10s \
+    --start-period=60s \
+    --start-interval=5s \
+    --retries=3 \
+    CMD [ "/sbin/kanidmd", "scripting", "healthcheck"]
+
+CMD [ "/sbin/kanidmd", "server"]

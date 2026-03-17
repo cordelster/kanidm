@@ -1,0 +1,15 @@
+# Alpine Linux native package build profile.
+# Uses standard FHS paths following Alpine conventions.
+# For Docker container builds, use container_generic.toml instead.
+
+# Don't set the value for autodetect
+# cpu_flags = "none"
+server_admin_bind_path = "/run/kanidmd/sock"
+server_ui_pkg_path = "/usr/share/kanidm/ui/hpkg"
+server_config_path = "/etc/kanidm/server.toml"
+server_migration_path = "/etc/kanidm/migrations.d"
+client_config_path = "/etc/kanidm/config"
+resolver_config_path = "/etc/kanidm/unixd"
+resolver_service_account_token_path = "/etc/kanidm/token"
+# Alpine ships /bin/sh (busybox ash), not bash
+resolver_unix_shell_path = "/bin/sh"
