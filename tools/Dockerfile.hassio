@@ -20,6 +20,7 @@ RUN apk add --no-cache \
     eudev-dev \
     linux-pam-dev \
     openssl-dev \
+    pkgconf \
     rsync \
     findutils \
     git
