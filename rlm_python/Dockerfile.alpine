@@ -12,6 +12,7 @@ ENV KANIDM_CONFIG_FILE="/data/kanidm"
 RUN apk add --no-cache \
     freeradius \
     freeradius-python3 \
+    freeradius-eap \
     python3 \
     py3-pip \
     su-exec \
