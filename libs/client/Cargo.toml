@@ -18,7 +18,10 @@ doctest = false
 [dependencies]
 compact_jwt = { workspace = true }
 tracing = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = [
+    "cookies",
+    "multipart",
+] }
 kanidm_proto = { workspace = true }
 kanidm_lib_file_permissions = { workspace = true }
 http = { workspace = true }
