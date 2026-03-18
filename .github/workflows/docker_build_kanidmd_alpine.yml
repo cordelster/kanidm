@@ -198,12 +198,19 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             docker login -u "${{ github.actor }}" --password-stdin ghcr.io
+          case "${{ matrix.image }}" in
+            kanidmd) DESC="Kanidm server daemon (Alpine ${{ matrix.alpine_version }})" ;;
+            kanidm)  DESC="Kanidm client tools (Alpine ${{ matrix.alpine_version }})" ;;
+            radius)  DESC="Kanidm FreeRADIUS integration (Alpine ${{ matrix.alpine_version }})" ;;
+          esac
           docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.description=${DESC}" \
             -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-devel"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.description=${DESC}" \
               -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ needs.set_tag_values.outputs.ref_name }}" \
               "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
               "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
@@ -256,12 +263,19 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             docker login -u "${{ github.actor }}" --password-stdin ghcr.io
+          case "${{ matrix.image }}" in
+            kanidmd) DESC="Kanidm server daemon (Home Assistant / HASSIO)" ;;
+            kanidm)  DESC="Kanidm client tools (Home Assistant / HASSIO)" ;;
+            radius)  DESC="Kanidm FreeRADIUS integration (Home Assistant / HASSIO)" ;;
+          esac
           docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.description=${DESC}" \
             -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-devel"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.description=${DESC}" \
               -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-${{ needs.set_tag_values.outputs.ref_name }}" \
               "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
               "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
