@@ -186,6 +186,14 @@ jobs:
           oras copy \
             --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-arm64-docker.tar:alpine-${{ matrix.alpine_version }}-arm64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-devel"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            oras copy \
+              --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-amd64-docker.tar:alpine-${{ matrix.alpine_version }}-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-${{ needs.set_tag_values.outputs.ref_name }}"
+            oras copy \
+              --from-oci-layout "/tmp/${{ matrix.image }}-alpine-${{ matrix.alpine_version }}-arm64-docker.tar:alpine-${{ matrix.alpine_version }}-arm64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
+          fi
       - name: Merge into multi-arch manifest
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
@@ -194,6 +202,12 @@ jobs:
             -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-devel"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            docker buildx imagetools create \
+              -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:alpine-${{ matrix.alpine_version }}-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
+          fi
 
   hassio_push:
     name: Push ${{ matrix.image }}:hassio (multi-arch)
@@ -230,6 +244,14 @@ jobs:
           oras copy \
             --from-oci-layout "/tmp/${{ matrix.image }}-hassio-arm64-docker.tar:hassio-arm64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-devel"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            oras copy \
+              --from-oci-layout "/tmp/${{ matrix.image }}-hassio-amd64-docker.tar:hassio-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-${{ needs.set_tag_values.outputs.ref_name }}"
+            oras copy \
+              --from-oci-layout "/tmp/${{ matrix.image }}-hassio-arm64-docker.tar:hassio-arm64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
+          fi
       - name: Merge into multi-arch manifest
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
@@ -238,3 +260,9 @@ jobs:
             -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-devel" \
             "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-devel"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            docker buildx imagetools create \
+              -t "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-amd64-${{ needs.set_tag_values.outputs.ref_name }}" \
+              "ghcr.io/${{ needs.set_tag_values.outputs.owner_lc }}/${{ matrix.image }}:hassio-arm64-${{ needs.set_tag_values.outputs.ref_name }}"
+          fi
