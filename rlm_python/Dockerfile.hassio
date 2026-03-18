@@ -16,6 +16,8 @@ RUN apk add --no-cache \
     py3-pip \
     openssl \
     curl \
+    su-exec \
+    bash \
     iproute2 \
     iputils \
     tzdata
